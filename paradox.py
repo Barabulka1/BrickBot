@@ -8,7 +8,7 @@ from config import BOT_TOKEN
 from telegram.ext import CommandHandler
 from telegram import ReplyKeyboardMarkup
 
-with open('rooms.json', 'r') as rms:
+with open('rooms.json', 'r') as rms:  #  загружаем данные
     rooms = json.load(rms)
 with open('users.json', 'r') as rms:
     users = json.load(rms)
@@ -22,19 +22,13 @@ markup = ReplyKeyboardMarkup([['/start', '/help']], one_time_keyboard=False)
 some_magic = {}
 
 
-async def exp(update, context):
-    print(context.args[0])
-    await update.message.reply_text('yeah')
-
-
 async def check_and_send(usr):
-    who_is_in_the_room = list(filter(lambda y: y['room'] == users[usr]['room'], users.values()))
-    names_of_those = list(filter(lambda y: users[y]['room'] == users[usr]['room'], users.keys()))
-    if all(list(map(lambda x: x['ready'], who_is_in_the_room))):
+    names_of_those = list(filter(lambda y: users[y]['room'] == users[usr]['room'], users.keys()))  #  ники людей из той же
+    #  комнаты, что и юзер
+    if all(list(map(lambda x: users[x]['ready'], names_of_those))):  #  все ли готовы сделать действие?
         for x in some_magic.items():
-            if x[0] in names_of_those:
-                users[x[0]]['ready'] = 0
-                print(111111111111111111111)
+            if x[0] in names_of_those:             #  рассылка ответов по этим юзерам (в some_magic хранятся переменные
+                users[x[0]]['ready'] = 0           #  для отсылки сообщений
                 await x[1].message.reply_text('some answer(don`t have brain yet)')
 
 
@@ -66,45 +60,56 @@ async def help_command(update, context):
 async def add_room(update, context):
     user = update.effective_user.mention_html()
 
-    # add user to list of all users
+    #  сменить юзеру комнату или, если он еще не в списке юзеров, добавить его туда
     if user in users:
         last_room = users[user]['room']
 
         # delete user from previous room
         last_users = rooms[last_room]
-        print(last_users)
         last_users.remove(user)
-        print(last_users)
         rooms[last_room] = last_users
+        if not last_room:
+            del rooms[last_room]
         users[user]['room'] = context.args[0]
     else:
         users[user] = {'room': context.args[0], 'hp': 5, 'ready': 0, 'action': '', 'inventory': [], 'frozen': 0}
-    if context.args[0] in rooms and user not in rooms[context.args[0]]:
-        rooms[context.args[0]].append(user)
-        users[user]['ready'] = 0
-    else:
-        rooms[context.args[0]] = [user]
 
-    with open('rooms.json', 'w') as rms:
-        json.dump(rooms, rms, ensure_ascii=True)
-    with open('users.json', 'w') as rms:
-        json.dump(users, rms, ensure_ascii=True)
+        if context.args[0] in rooms:                #  комната существует?
+            if user not in rooms[context.args[0]]:  # юзер уже находится в этой комнате?
+                rooms[context.args[0]].append(user)
+                users[user]['ready'] = 0
+        else:
+            rooms[context.args[0]] = [user]
 
     await update.message.reply_text('Успешно добавлена комната')
 
 
 async def make_action(update, context):
     user = update.effective_user.mention_html()
-    users[user]['ready'] = 1
-    some_magic[user] = update
+    users[user]['ready'] = 1                     #  он готов сделать действие
+    some_magic[user] = update                    #  переменная для отсылки сообщений
+    if users[user]['frozen'] == 1:               #  он в цементе?
+        await update.message.reply_text('asejlaja')
+        return False
+    await check_and_send(user)                   #  проверяем, готовы ли все, если да, то отсылаем всем
+    return True
 
-    with open('rooms.json', 'w') as rms:
-        json.dump(rooms, rms, ensure_ascii=True)
-    with open('users.json', 'w') as rms:
-        json.dump(users, rms, ensure_ascii=True)
-    print(type(update.message))
 
-    await check_and_send(user)
+#async def brick(update, context):
+#    user = update.effective_user.mention_html()
+#    can_make = make_action(update)
+#    if can_make:
+#        if 'brick' not in users[user]['inv']:
+#            users[user]['action'] = 'take_brick -'
+#            inv = users[user]['inv']
+#            if len(inv) >= 4:
+#                await update.message.reply_text("Нужно выкинуть что-то. Инвентарь переполнен")
+#                await update.message.reply_text(f"1. {inv[0]} 2. {inv[1]} 3. {inv[2]} 4. {inv[3]} '-' нафиг эти ваши"
+#                                                f"кирпичи, так обойдусь")
+#            await update.message.reply_text("Теперь у вас есть кирпич!")
+#        else:
+#            await update.message.reply_text('У вас уже есть кирпич')
+#            users[user]['ready'] = 0
 
 
 def main():
@@ -117,23 +122,12 @@ def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("join_room", add_room))
     application.add_handler(CommandHandler('make_action', make_action))
-    application.add_handler(CommandHandler('exp', exp))
-    print(dir(Message))
 
     application.run_polling()
 
 
 if __name__ == '__main__':
     main()
-
-    # kostili for erasing empty rooms
-    goofy_ah = rooms.keys()
-    del_list = []
-    for i in goofy_ah:
-        if rooms[i] == None:
-            del_list.append(i)
-    for j in del_list:
-        del rooms[j]
 
     with open('rooms.json', 'w') as rms:
         json.dump(rooms, rms, ensure_ascii=True)
