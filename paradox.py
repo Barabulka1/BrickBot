@@ -68,18 +68,18 @@ async def add_room(update, context):
         last_users = rooms[last_room]
         last_users.remove(user)
         rooms[last_room] = last_users
-        if not last_room:
+        if not rooms[last_room]:
             del rooms[last_room]
         users[user]['room'] = context.args[0]
     else:
         users[user] = {'room': context.args[0], 'hp': 5, 'ready': 0, 'action': '', 'inventory': [], 'frozen': 0}
 
-        if context.args[0] in rooms:                #  комната существует?
-            if user not in rooms[context.args[0]]:  # юзер уже находится в этой комнате?
-                rooms[context.args[0]].append(user)
-                users[user]['ready'] = 0
-        else:
-            rooms[context.args[0]] = [user]
+    if context.args[0] in rooms:                #  комната существует?
+        if user not in rooms[context.args[0]]:  #  юзер уже находится в этой комнате?
+            rooms[context.args[0]].append(user)
+            users[user]['ready'] = 0
+    else:
+        rooms[context.args[0]] = [user]
 
     await update.message.reply_text('Успешно добавлена комната')
 
