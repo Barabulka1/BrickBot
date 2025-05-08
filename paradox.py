@@ -84,32 +84,70 @@ async def add_room(update, context):
     await update.message.reply_text('Успешно добавлена комната')
 
 
-async def make_action(update, context):
+def make_action(update):
     user = update.effective_user.mention_html()
     users[user]['ready'] = 1                     #  он готов сделать действие
     some_magic[user] = update                    #  переменная для отсылки сообщений
     if users[user]['frozen'] == 1:               #  он в цементе?
-        await update.message.reply_text('asejlaja')
         return False
-    await check_and_send(user)                   #  проверяем, готовы ли все, если да, то отсылаем всем
     return True
 
 
-#async def brick(update, context):
-#    user = update.effective_user.mention_html()
-#    can_make = make_action(update)
-#    if can_make:
-#        if 'brick' not in users[user]['inv']:
-#            users[user]['action'] = 'take_brick -'
-#            inv = users[user]['inv']
-#            if len(inv) >= 4:
-#                await update.message.reply_text("Нужно выкинуть что-то. Инвентарь переполнен")
-#                await update.message.reply_text(f"1. {inv[0]} 2. {inv[1]} 3. {inv[2]} 4. {inv[3]} '-' нафиг эти ваши"
-#                                                f"кирпичи, так обойдусь")
-#            await update.message.reply_text("Теперь у вас есть кирпич!")
-#        else:
-#            await update.message.reply_text('У вас уже есть кирпич')
-#            users[user]['ready'] = 0
+async def brick(update, context):
+    user = update.effective_user.mention_html()
+    can_make = make_action(update)                #  не в цементе ли юзер?
+    if can_make:
+        if 'brick' not in users[user]['inventory']:   #  нет ли у юзера кирпича уже (можно держать один за раз)
+            users[user]['action'] = 'take_brick - -'  #  вместо первого прочерка будет стоять номер слота, куда будет
+            #  взят кирпич (если понадобится), вместо второго - в кого будет кинут предмет (для действия кидания)
+            inv = users[user]['inventory']
+            if len(inv) >= 4:                      #  не переполнен ли инвентарь?
+                await update.message.reply_text("Нужно выкинуть что-то. Инвентарь переполнен")
+                await update.message.reply_text(f"1. {inv[0]} 2. {inv[1]} 3. {inv[2]} 4. {inv[3]} '-' нафиг эти ваши "
+                                                f"кирпичи, так обойдусь", reply_markup=
+                ReplyKeyboardMarkup([['/throw_out_1', '/throw_out_2', '/throw_out_3'],
+                                     ['/throw_out_4', '/throw_out_none']], one_time_keyboard=False))
+                #  вызов клавиатуры для выброса чего-либо для очистки инвентаря (либо отказаться от подбора кирпича)
+            else:
+                await update.message.reply_text("Теперь у вас будет кирпич!")
+                await check_and_send(user)
+        else:
+            await update.message.reply_text('У вас уже есть кирпич')
+            users[user]['ready'] = 0
+
+
+async def throw_out_base(usr, num):
+    act = users[usr]['action'].split()     #  базовая функция выброса. Она записывает в действие вместо чего
+    act[1] = num                           #  пользователь берет кирпич (или предмет)
+    users[usr]['action'] = ' '.join(act)
+    await check_and_send(usr)
+
+
+async def throw_out1(update, context):
+    await update.message.reply_text('1')
+    await throw_out_base(update.effective_user.mention_html(), '1')
+
+
+async def throw_out2(update, context):
+    await update.message.reply_text('2')
+    await throw_out_base(update.effective_user.mention_html(), '2')
+
+
+async def throw_out3(update, context):
+    await update.message.reply_text('3')
+    await throw_out_base(update.effective_user.mention_html(), '3')
+
+
+async def throw_out4(update, context):
+    await update.message.reply_text('4')
+    await throw_out_base(update.effective_user.mention_html(), '4')
+
+
+async def throw_out_none(update, context):         #  как 4 предыдущих функции, но назначает юзера как не готового
+    user = update.effective_user.mention_html()    #  сделать действие
+    await update.message.reply_text('-')
+    users[user]['ready'] = 0
+    await throw_out_base(user, '-')
 
 
 def main():
@@ -121,7 +159,12 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("join_room", add_room))
-    application.add_handler(CommandHandler('make_action', make_action))
+    application.add_handler(CommandHandler("take_brick", brick))
+    application.add_handler(CommandHandler("throw_out_1", throw_out1))
+    application.add_handler(CommandHandler("throw_out_2", throw_out2))
+    application.add_handler(CommandHandler("throw_out_3", throw_out3))
+    application.add_handler(CommandHandler("throw_out_4", throw_out4))
+    application.add_handler(CommandHandler("throw_out_none", throw_out_none))
 
     application.run_polling()
 
