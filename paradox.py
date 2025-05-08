@@ -3,15 +3,13 @@ import logging
 from fileinput import close
 
 from telebot.types import Update, Message
-from telegram.ext import Application, MessageHandler, filters
+from telegram.ext import Application, MessageHandler, filters, ConversationHandler
 from config import BOT_TOKEN
 from telegram.ext import CommandHandler
 from telegram import ReplyKeyboardMarkup
 
-with open('rooms.json', 'r') as rms:  #  загружаем данные
-    rooms = json.load(rms)
-with open('users.json', 'r') as rms:
-    users = json.load(rms)
+rooms = {}
+users = {}
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG
@@ -23,29 +21,37 @@ some_magic = {}
 
 
 async def check_and_send(usr):
-    names_of_those = list(filter(lambda y: users[y]['room'] == users[usr]['room'], users.keys()))  #  ники людей из той же
+    names_of_those = rooms[users[usr]['room']]  #  ники людей из той же
     #  комнаты, что и юзер
     if all(list(map(lambda x: users[x]['ready'], names_of_those))):  #  все ли готовы сделать действие?
+        msg = brain(names_of_those)
         for x in some_magic.items():
             if x[0] in names_of_those:             #  рассылка ответов по этим юзерам (в some_magic хранятся переменные
                 users[x[0]]['ready'] = 0           #  для отсылки сообщений
-                await x[1].message.reply_text('some answer(don`t have brain yet)')
+                await x[1].message.reply_text(msg)
 
 
-async def echo(update, context):
-    with open('fbi.txt', 'r') as fbi:
-        f = fbi.read()
-    with open('fbi.txt', 'w') as fbi:
-        fbi.write(f + '\n' + update.message.text)
-    await update.message.reply_text('записал' + update.message.text)
+def brain(users1):
+    fin_message = ''
+    for user in users1:
+        act = users[user]['action'].split()
+        if act[0] == 'take_brick':
+            if act[1] == '-':
+                users[user]['inventory'].append('brick')
+            else:
+                users[user]['inventory'][int(act[1]) - 1] = 'brick'
+            fin_message += f'{user.split(">")[1][:-3]} взял кирпич'
+    return fin_message
 
 
 async def start(update, context):
-    user = update.effective_user
+    user = update.effective_user.mention_html()
+    users[user] = {'room': "wait", 'hp': 5, 'ready': 0, 'action': '', 'inventory': [], 'frozen': 0}
     await update.message.reply_html(
-        rf'Привет {user.mention_html()}! Я бот для игры в "Догони меня кирпич!". Узнать правила можно по команде /rules',
+        rf'Привет {user}! Я бот для игры в "Догони меня кирпич!". Узнать правила можно по команде /rules',
         reply_markup=markup
     )
+    return 1
 
 
 async def rules(update, context):
@@ -57,25 +63,22 @@ async def help_command(update, context):
 
 
 #  rooms starting
-async def add_room(update, context):
+async def join_room(update, context):
     user = update.effective_user.mention_html()
 
     #  сменить юзеру комнату или, если он еще не в списке юзеров, добавить его туда
-    if user in users:
-        last_room = users[user]['room']
+    if users[user]["room"] != "wait":
+        room = users[user]['room']
 
-        # delete user from previous room
-        last_users = rooms[last_room]
-        last_users.remove(user)
-        rooms[last_room] = last_users
-        if not rooms[last_room]:
-            del rooms[last_room]
-        users[user]['room'] = context.args[0]
-    else:
-        users[user] = {'room': context.args[0], 'hp': 5, 'ready': 0, 'action': '', 'inventory': [], 'frozen': 0}
+        room_users = rooms[room]
+        room_users.remove(user)
+        rooms[room] = room_users  # удаление пользователя из комнаты
+        if not rooms[room]:
+            del rooms[room]
+    users[user]['room'] = context.args[0]
 
-    if context.args[0] in rooms:                #  комната существует?
-        if user not in rooms[context.args[0]]:  #  юзер уже находится в этой комнате?
+    if context.args[0] in rooms:  # комната существует?
+        if user not in rooms[context.args[0]]:  # юзер уже находится в этой комнате?
             rooms[context.args[0]].append(user)
             users[user]['ready'] = 0
     else:
@@ -86,7 +89,6 @@ async def add_room(update, context):
 
 def make_action(update):
     user = update.effective_user.mention_html()
-    users[user]['ready'] = 1                     #  он готов сделать действие
     some_magic[user] = update                    #  переменная для отсылки сообщений
     if users[user]['frozen'] == 1:               #  он в цементе?
         return False
@@ -98,81 +100,59 @@ async def brick(update, context):
     can_make = make_action(update)                #  не в цементе ли юзер?
     if can_make:
         if 'brick' not in users[user]['inventory']:   #  нет ли у юзера кирпича уже (можно держать один за раз)
-            users[user]['action'] = 'take_brick - -'  #  вместо первого прочерка будет стоять номер слота, куда будет
-            #  взят кирпич (если понадобится), вместо второго - в кого будет кинут предмет (для действия кидания)
+            users[user]['action'] = 'take_brick -'  #  вместо прочерка будет стоять номер слота, куда будет
+            #  взят кирпич или в кого будет кинут предмет (для действия кидания)
             inv = users[user]['inventory']
-            if len(inv) >= 4:                      #  не переполнен ли инвентарь?
-                await update.message.reply_text("Нужно выкинуть что-то. Инвентарь переполнен")
-                await update.message.reply_text(f"1. {inv[0]} 2. {inv[1]} 3. {inv[2]} 4. {inv[3]} '-' нафиг эти ваши "
-                                                f"кирпичи, так обойдусь", reply_markup=
-                ReplyKeyboardMarkup([['/throw_out_1', '/throw_out_2', '/throw_out_3'],
-                                     ['/throw_out_4', '/throw_out_none']], one_time_keyboard=False))
-                #  вызов клавиатуры для выброса чего-либо для очистки инвентаря (либо отказаться от подбора кирпича)
+            if len(inv) >= 4:  #  не переполнен ли инвентарь?
+                return 2
             else:
+                users[user]['action'] = 'take_brick -'
+                users[user]['ready'] = 1                     #  он готов сделать действие
                 await update.message.reply_text("Теперь у вас будет кирпич!")
                 await check_and_send(user)
         else:
             await update.message.reply_text('У вас уже есть кирпич')
-            users[user]['ready'] = 0
+    else:
+        users[user]['ready'] = 1
+    return 1
 
 
-async def throw_out_base(usr, num):
-    act = users[usr]['action'].split()     #  базовая функция выброса. Она записывает в действие вместо чего
-    act[1] = num                           #  пользователь берет кирпич (или предмет)
-    users[usr]['action'] = ' '.join(act)
-    await check_and_send(usr)
+async def throw_out(update, context):
+    user = update.effective_user.mention_html()
+    inv = users[user]['inventory']
+    await update.message.reply_text("Нужно выкинуть что-то. Инвентарь переполнен")
+    await update.message.reply_text(f"1. {inv[0]} 2. {inv[1]} 3. {inv[2]} 4. {inv[3]} '-' нафиг эти ваши "
+                                        f"кирпичи, так обойдусь")
+    inp = update.message.text
+    if inp in ['1', '2', '3', '4', '-']:
+        act = users[user]['action'].split()
+        act[1] = inp
+        users[user]['action'] = ' '.join(act)
+        if not inp == '-':
+            users[user]['ready'] = 1
+    else:
+        return 2
+    return 1
 
 
-async def throw_out1(update, context):
-    await update.message.reply_text('1')
-    await throw_out_base(update.effective_user.mention_html(), '1')
-
-
-async def throw_out2(update, context):
-    await update.message.reply_text('2')
-    await throw_out_base(update.effective_user.mention_html(), '2')
-
-
-async def throw_out3(update, context):
-    await update.message.reply_text('3')
-    await throw_out_base(update.effective_user.mention_html(), '3')
-
-
-async def throw_out4(update, context):
-    await update.message.reply_text('4')
-    await throw_out_base(update.effective_user.mention_html(), '4')
-
-
-async def throw_out_none(update, context):         #  как 4 предыдущих функции, но назначает юзера как не готового
-    user = update.effective_user.mention_html()    #  сделать действие
-    await update.message.reply_text('-')
-    users[user]['ready'] = 0
-    await throw_out_base(user, '-')
+async def stop(update, context):
+    await update.message.reply_text('stopped')
+    return ConversationHandler.END
 
 
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
-    text_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, echo)
-
-    application.add_handler(text_handler)
-    application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("join_room", add_room))
-    application.add_handler(CommandHandler("take_brick", brick))
-    application.add_handler(CommandHandler("throw_out_1", throw_out1))
-    application.add_handler(CommandHandler("throw_out_2", throw_out2))
-    application.add_handler(CommandHandler("throw_out_3", throw_out3))
-    application.add_handler(CommandHandler("throw_out_4", throw_out4))
-    application.add_handler(CommandHandler("throw_out_none", throw_out_none))
+    application.add_handler(ConversationHandler(entry_points=[CommandHandler("start", start)],
+                                                states={1: [CommandHandler('take_brick', brick),
+                                                            CommandHandler("join_room", join_room)],
+                                                        2: [MessageHandler(filters.TEXT & ~filters.COMMAND, throw_out)]
+                                                        },
+                                                fallbacks=[CommandHandler('stop', stop)]))
 
     application.run_polling()
 
 
 if __name__ == '__main__':
     main()
-
-    with open('rooms.json', 'w') as rms:
-        json.dump(rooms, rms, ensure_ascii=True)
-    with open('users.json', 'w') as rms:
-        json.dump(users, rms, ensure_ascii=True)
