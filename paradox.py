@@ -77,7 +77,7 @@ def brain(users1):
             else:
                 fin_message += (f'{user.split(">")[1][:-3]} кинул арматуру в {prey.split(">")[1][:-3]}, однако не пробил'
                                 f' цемент.')
-            users[prey]['inventory'].remove('арматура')
+            users[user]['inventory'].remove('арматура')
 
         elif act[0] == 'throw_cement':
             prey = ' '.join(act[1:])
@@ -103,7 +103,7 @@ def brain(users1):
                 lst[2] = '1'
                 users[prey]['frozen'] = ''.join(lst)
                 fin_message += f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}!'
-            users[prey]['inventory'].remove('цемент')
+            users[user]['inventory'].remove('цемент')
 
         elif act[0] == 'throw_brick':
             prey = ' '.join(act[1:])
@@ -134,7 +134,7 @@ def brain(users1):
                 fin_message += (
                     f'{user.split(">")[1][:-3]} кинул кирпич в {prey.split(">")[1][:-3]}, однако не пробил'
                     f' цемент.')
-            users[prey]['inventory'].remove('кирпич')
+            users[user]['inventory'].remove('кирпич')
     for user in users1:
         fr = users[user]['frozen'].split()
         fr[0], fr[1] = fr[1], '0'
