@@ -9,6 +9,7 @@ from telegram import ReplyKeyboardMarkup
 import random
 
 rooms = {}
+running_games = []
 users = {}
 items = {'песок': 'песок', 'каска': 'каску', 'цемент': 'цемент', 'арматура': 'арматуру'}
 items_translate = {'песок': 'sand', 'каска': 'helmet', 'цемент': 'cement', 'арматура': 'armature'}
@@ -162,22 +163,24 @@ def brain(users1):
         return fin_message
     for user in users1:
         fr = users[user]['frozen'].split()
+        print(user, fr)
         fr[0] = fr[1]
         fr[1] = '0'
         users[user]['ready'] = 0
         users[user]['action'] = '- -'
         users[user]['item'] = '-'
+        users[user]['frozen'] = ' '.join(fr)
         if fr[0] == '1':
-            print('frozen')
+            print(user, fr)
             users[user]['ready'] = 1
         if users[user]['hp'] <= 0:
-            if abs(users[user]['hp'] % 1) != 0.1:
+            print(abs(users[user]['hp'] % 1))
+            if round(abs(users[user]['hp'] % 1), 2) != 0.1:
                 users[user]['hp'] = -0.1
                 users[user]['ready'] = 1
                 fin_message += f'{user.split(">")[1][:-3]} умер. Помянем... \n'
         else:
             if survived == 1:
-                users[user]['frozen'] = ' '.join(fr)
                 fin_message += f'\n{user.split(">")[1][:-3]} победил! Поздравим его\n'
                 return fin_message
     return fin_message
@@ -185,6 +188,7 @@ def brain(users1):
 
 async def start(update, context):
     user = update.effective_user.mention_html()
+    some_magic[user] = update
     users[user] = {'room': "wait", 'hp': 5, 'ready': 0, 'action': '', 'inventory': [], 'frozen': '0 0', 'last_dodge': 0,
                    'start_game': 0, 'item': '-'}
     await update.message.reply_html(
@@ -200,6 +204,23 @@ async def rules(update, context):
 
 async def help_command(update, context):
     await update.message.reply_text("Я пока не умею помогать... Я только ваше эхо.")
+
+
+async def start_game(update, context):
+    user = update.effective_user.mention_html()
+    room = users[user]['room']
+    if room == 'wait':
+        await update.message.reply_text('Вы находитесь в комнате ожидания. Для начала игры присоединитесь к другой комнате')
+        return 1
+    users[user]['start_game'] = 1
+    print(list(map(lambda x: users[x]['start_game'], rooms[room])))
+    if all(list(map(lambda x: users[x]['start_game'], rooms[room]))):
+        running_games.append(room)
+        for user1 in rooms[room]:
+            users[user1] = {'room': room, 'hp': 5, 'ready': 0, 'action': '', 'inventory': [], 'frozen': '0 0',
+                           'last_dodge': 0, 'start_game': 0, 'item': '-'}
+            await some_magic[user1].message.reply_text('Игра началась')
+    return 1
 
 
 #  rooms starting
@@ -231,6 +252,10 @@ async def make_action(update):
     user = update.effective_user.mention_html()
     some_magic[user] = update                    #  переменная для отсылки сообщений
     print(users[user]['frozen'])
+    print(users[user]['room'], running_games)
+    if users[user]['room'] not in running_games:
+        await update.message.reply_text('Игра еще не начата')
+        return False
     if users[user]['frozen'][0] == '1':               #  он в цементе?
         print('cement')
         await update.message.reply_text('Пока вы в цементе, вы ничего не можете делать')
@@ -427,7 +452,8 @@ def main():
                                                             CommandHandler('throw_cement', throw_cement),
                                                             CommandHandler('dodge', dodge),
                                                             CommandHandler('throw_sand', throw_sand),
-                                                            CommandHandler('repair_helmet', repair_helmet)],
+                                                            CommandHandler('repair_helmet', repair_helmet),
+                                                            CommandHandler('start_game', start_game)],
                                                         2: [MessageHandler(filters.TEXT & ~filters.COMMAND, throw_out)],
                                                         3: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_prey)]
                                                         },
