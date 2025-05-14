@@ -31,18 +31,31 @@ async def check_and_send(usr):
     names_of_those = rooms[users[usr]['room']]  #  ники людей из той же
     #  комнаты, что и юзер
     if all(list(map(lambda x: users[x]['ready'], names_of_those))):  #  все ли готовы сделать действие?
-        msg = brain(names_of_those)
+        msg, end = brain(names_of_those)
+        end_str = ''
+        if end:
+            end_str = '\n\nИгра закончена, вы в комнате ожидания'
+            rm = users[usr]['room']
+            del rooms[rm]
+            if rm in running_games:
+                running_games.remove(rm)
         for x in names_of_those:
             inv = users[x]['inventory']
             inv_str = 'Текущий инвентарь: '        #  рассылка ответов по этим юзерам (в some_magic хранятся переменные
                                                    #  для отсылки сообщений
-            await some_magic[x].message.reply_text(msg)
+            await some_magic[x].message.reply_text(msg + end_str)
             for i in range(len(inv)):
                 inv_str += str(i + 1) + '. ' + inv[i] + ' '
             hp_str = f'\nВаше здоровье: {int(users[x]["hp"])}'
             await some_magic[x].message.reply_text(inv_str + hp_str)
+            if end:
+                users[x]['start_game'] = 0
+                users[x]['room'] = 'wait'
+
 
 def brain(users1):
+    end = False
+    all_fr = True
     fin_message = ''
     for user in users1:
         users[user]['last_dodge'] = 0
@@ -160,7 +173,7 @@ def brain(users1):
     if survived == 0:
         fin_message += ('Последний негритенок посмотел устало\n Он пошел повесился, и никого не стало... \n'
                         ' Ничья: все мертвы\n')
-        return fin_message
+        return fin_message, True
     for user in users1:
         fr = users[user]['frozen'].split()
         print(user, fr)
@@ -180,10 +193,14 @@ def brain(users1):
                 users[user]['ready'] = 1
                 fin_message += f'{user.split(">")[1][:-3]} умер. Помянем... \n'
         else:
+            all_fr = False
             if survived == 1:
                 fin_message += f'\n{user.split(">")[1][:-3]} победил! Поздравим его\n'
-                return fin_message
-    return fin_message
+                end = True
+    if all_fr:
+        fin_message += 'Вы навсегда будете замурованы... Вы все. Секретная концовка? \n'
+        end = True
+    return fin_message, end
 
 
 async def start(update, context):
@@ -245,6 +262,7 @@ async def join_room(update, context):
     else:
         rooms[context.args[0]] = [user]
 
+    users[user]['start_game'] = 0
     await update.message.reply_text('Успешно добавлена комната')
 
 
@@ -301,6 +319,7 @@ async def take_item(update, context):
         print(users[user]['item'])
         if users[user]['item'] == '-':
             item = random.choice(['песок', 'каска', 'цемент', 'арматура'])
+            users[user]['item'] = item
         else:
             item = users[user]['item']
         users[user]['action'] = f'{item}take_item -'
