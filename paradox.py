@@ -33,24 +33,24 @@ async def check_and_send(usr):
     if all(list(map(lambda x: users[x]['ready'], names_of_those))):  #  все ли готовы сделать действие?
         msg, end = brain(names_of_those)
         end_str = ''
-        if end:
+        if end:  # игра окончена?
             end_str = '\n\nИгра закончена, вы в комнате ожидания'
-            rm = users[usr]['room']
+            rm = users[usr]['room']  # при окончании игры комната удаляется
             del rooms[rm]
-            if rm in running_games:
+            if rm in running_games:  # в комнате не идет игра
                 running_games.remove(rm)
         for x in names_of_those:
             inv = users[x]['inventory']
             inv_str = 'Текущий инвентарь: '        #  рассылка ответов по этим юзерам (в some_magic хранятся переменные
                                                    #  для отсылки сообщений
-            await some_magic[x].message.reply_text(msg + end_str)
+            await some_magic[x].message.reply_text(msg + end_str) # итог раунда
             for i in range(len(inv)):
                 inv_str += str(i + 1) + '. ' + inv[i] + ' '
             hp_str = f'\nВаше здоровье: {int(users[x]["hp"])}'
-            await some_magic[x].message.reply_text(inv_str + hp_str)
+            await some_magic[x].message.reply_text(inv_str + hp_str) # вывод инвентаря и здоровья 
             if end:
                 users[x]['start_game'] = 0
-                users[x]['room'] = 'wait'
+                users[x]['room'] = 'wait'  # игроки переносятся в комнату ожидания 
 
 
 def brain(users1):
@@ -58,22 +58,22 @@ def brain(users1):
     all_fr = True
     fin_message = ''
     for user in users1:
-        users[user]['last_dodge'] = 0
-        act = users[user]['action'].split()
+        users[user]['last_dodge'] = 0  # разрешение на уворот
+        act = users[user]['action'].split() # первый элемент это название действия, второй цель
         print(act)
-        if act[0] == 'take_brick':
+        if act[0] == 'take_brick':  # обработка действий
             if act[1] == '-':
                 users[user]['inventory'].append('кирпич')
             else:
-                users[user]['inventory'][int(act[1]) - 1] = 'кирпич'
+                users[user]['inventory'][int(act[1]) - 1] = 'кирпич' # вместо чего брать
             fin_message += f'{user.split(">")[1][:-3]} взял кирпич\n'
 
         elif 'take_item' in act[0]:
             item = act[0][:-9]
-            if act[1] == '-':
+            if act[1] == '-':  # если есть место в инвентаре
                 users[user]['inventory'].append(item)
                 fin_message += f'{user.split(">")[1][:-3]} взял {items[item]}\n'
-            elif act[1] == '*':
+            elif act[1] == '*':  # * если не взял предложенный предмет
                 fin_message += f'{user.split(">")[1][:-3]} нашел {items[item]}, но выкинул(\n'
             else:
                 users[user]['inventory'][int(act[1]) - 1] = item
@@ -83,13 +83,13 @@ def brain(users1):
             print(users[user]['inventory'])
             prey = ' '.join(act[1:])
             prey_act = users[prey]['action'].split()
-            if users[prey]['frozen'][0] == '0':
-                if prey_act[0] == 'dodge':
+            if users[prey]['frozen'][0] == '0':  # цель не в цементе 
+                if prey_act[0] == 'dodge':  # увернулся?
                     fin_message += f'{user.split(">")[1][:-3]} кинул арматуру в {prey.split(">")[1][:-3]}, но тот увернулся!\n'
-                elif prey_act[0] == 'throw_sand':
+                elif prey_act[0] == 'throw_sand':  # кинул песок?
                     fin_message += (f'{user.split(">")[1][:-3]} кинул арматуру в {prey.split(">")[1][:-3]}, но промазал '
                                     f'из-за песка\n')
-                else:
+                else:  # арматура долетела
                     users[prey]['hp'] -= 1
                     fin_message += f'{user.split(">")[1][:-3]} кинул арматуру в {prey.split(">")[1][:-3]}!\n'
             else:
@@ -101,25 +101,25 @@ def brain(users1):
             prey = ' '.join(act[1:])
             prey_act = users[prey]['action'].split()
             print(users[user]['inventory'], prey_act)
-            if user == prey:
+            if user == prey:  # кинул в себя?
                 lst = list(users[prey]['frozen'])
-                lst[2] = '1'
+                lst[2] = '1'  # теперь заморожен
                 users[prey]['frozen'] = ''.join(lst)
                 fin_message += f'{user.split(">")[1][:-3]} кинул цемент в себя! Ну и идиот).\n'
-            elif prey_act[0] == 'dodge':
+            elif prey_act[0] == 'dodge':  # увернулся?
                 fin_message += f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}, но тот увернулся!\n'
-            elif prey_act[0] == 'throw_sand':
+            elif prey_act[0] == 'throw_sand':  # кинул песок?
                 fin_message += (f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}, но промазал '
                                 f'из-за песка\n')
-            elif prey_act[0] == 'throw_brick' and ' '.join(prey_act[1:]) == user:
+            elif prey_act[0] == 'throw_brick' and ' '.join(prey_act[1:]) == user:  # цель кинула в нас кирпич 
                 fin_message += (f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}, но цемент врезался '
                                 f'в кирпич\n')
-            elif prey_act[0] == 'throw_cement' and ' '.join(prey_act[1:]) == user:
+            elif prey_act[0] == 'throw_cement' and ' '.join(prey_act[1:]) == user:  # цель кинула в нас цемент
                 fin_message += (f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}, но он встретил на '
                                 f'пути брата-цемента\n')
             else:
                 lst = list(users[prey]['frozen'])
-                lst[2] = '1'
+                lst[2] = '1'  # теперь заморожен 
                 users[prey]['frozen'] = ''.join(lst)
                 fin_message += f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}!\n'
             users[user]['inventory'].remove('цемент')
@@ -129,13 +129,13 @@ def brain(users1):
             prey = ' '.join(act[1:])
             print(prey)
             prey_act = users[prey]['action'].split()
-            if users[prey]['frozen'][0] == '0':
-                if user == prey:
+            if users[prey]['frozen'][0] == '0':  # цель в цементе?
+                if user == prey:  # кинул в себя?
                     users[prey]['hp'] -= 1
                     fin_message += f'{user.split(">")[1][:-3]} кинул кирпич в себя! Ну и нафига?\n'
-                elif prey_act[0] == 'dodge':
+                elif prey_act[0] == 'dodge':  # увернулся?
                     fin_message += f'{user.split(">")[1][:-3]} кинул кирпич в {prey.split(">")[1][:-3]}, но тот увернулся!\n'
-                elif prey_act[0] == 'throw_sand':
+                elif prey_act[0] == 'throw_sand':  # кинул песок?
                     fin_message += (
                         f'{user.split(">")[1][:-3]} кинул кирпич в {prey.split(">")[1][:-3]}, но промазал '
                         f'из-за песка\n')
@@ -143,11 +143,11 @@ def brain(users1):
                     fin_message += (
                         f'{user.split(">")[1][:-3]} кинул кирпич в {prey.split(">")[1][:-3]}, но кирпич врезался '
                         f'в ДРУГОЙ кирпич (много кирпичей однако)\n')
-                elif prey_act[0] == 'throw_cement' and ' '.join(prey_act[1:]) == user:
+                elif prey_act[0] == 'throw_cement' and ' '.join(prey_act[1:]) == user:  # в нас кинули цемент?
                     fin_message += (
                         f'{user.split(">")[1][:-3]} кинул кирпич в {prey.split(">")[1][:-3]}, но он встретил на '
                         f'пути цемент :О\n')
-                elif prey_act[0] == 'throw_armature' and ' '.join(prey_act[1:]) == user:
+                elif prey_act[0] == 'throw_armature' and ' '.join(prey_act[1:]) == user:  # в нас кинули кирпич?
                     fin_message += (
                         f'{user.split(">")[1][:-3]} кинул кирпич в {prey.split(">")[1][:-3]}, но он был разбит '
                         f'летящей арматурой!\n')
@@ -169,15 +169,15 @@ def brain(users1):
             users[user]['hp'] += 1
             users[user]['inventory'].remove('каска')
             fin_message += f'{user.split(">")[1][:-3]} починил каску\n'
-    survived = sum(list(map(lambda x: 1 if users[x]['hp'] >= 1 else 0, users1)))
-    if survived == 0:
+    survived = sum(list(map(lambda x: 1 if users[x]['hp'] >= 1 else 0, users1))) # сколько выживших?
+    if survived == 0:  # все умерли?
         fin_message += ('Последний негритенок посмотел устало\n Он пошел повесился, и никого не стало... \n'
                         ' Ничья: все мертвы\n')
-        return fin_message, True
+        return fin_message, True  # конец игры 
     for user in users1:
         fr = users[user]['frozen'].split()
         print(user, fr)
-        fr[0] = fr[1]
+        fr[0] = fr[1] # замораживаем всех, кто был зацементирован в этом раунде
         fr[1] = '0'
         users[user]['ready'] = 0
         users[user]['action'] = '- -'
@@ -186,20 +186,20 @@ def brain(users1):
         if fr[0] == '1':
             print(user, fr)
             users[user]['ready'] = 1
-        if users[user]['hp'] <= 0:
+        if users[user]['hp'] <= 0: # юзер сдох?
             print(abs(users[user]['hp'] % 1))
-            if round(abs(users[user]['hp'] % 1), 2) != 0.1:
+            if round(abs(users[user]['hp'] % 1), 2) != 0.1: # он был мертв до этого раунда?
                 users[user]['hp'] = -0.1
                 users[user]['ready'] = 1
                 fin_message += f'{user.split(">")[1][:-3]} умер. Помянем... \n'
         else:
-            all_fr = False
-            if survived == 1:
+            all_fr = False  # не все в цементе
+            if survived == 1:  # один выживший?
                 fin_message += f'\n{user.split(">")[1][:-3]} победил! Поздравим его\n'
-                end = True
-    if all_fr:
+                end = True  # конец
+    if all_fr: # все в цементе?
         fin_message += 'Вы навсегда будете замурованы... Вы все. Секретная концовка? \n'
-        end = True
+        end = True  # конец
     return fin_message, end
 
 
