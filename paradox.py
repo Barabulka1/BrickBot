@@ -1,7 +1,4 @@
 import logging
-from fileinput import close
-
-from telebot.types import Update, Message
 from telegram.ext import Application, MessageHandler, filters, ConversationHandler
 from config import BOT_TOKEN
 from telegram.ext import CommandHandler
@@ -25,6 +22,7 @@ keyboard = ReplyKeyboardMarkup([['/take_brick', '/take_item', '/dodge'],
             ['/throw_brick', '/throw_armature', '/throw_cement'],
             ['/throw_sand', '/repair_helmet']])
 some_magic = {}
+application = Application.builder().token(BOT_TOKEN).build()
 
 
 async def check_and_send(usr):
@@ -35,22 +33,24 @@ async def check_and_send(usr):
         end_str = ''
         if end:  # игра окончена?
             end_str = '\n\nИгра закончена, вы в комнате ожидания'
-            rm = users[usr]['room']  # при окончании игры комната удаляется
+            rm = users[usr]['room']   # при окончании игры комната удаляется
             del rooms[rm]
-            if rm in running_games:  # в комнате не идет игра
-                running_games.remove(rm)
+            if rm in running_games:
+                running_games.remove(rm) # в комнате не идет игра
         for x in names_of_those:
             inv = users[x]['inventory']
             inv_str = 'Текущий инвентарь: '        #  рассылка ответов по этим юзерам (в some_magic хранятся переменные
                                                    #  для отсылки сообщений
-            await some_magic[x].message.reply_text(msg + end_str) # итог раунда
+            await some_magic[x].message.reply_text(msg + end_str)
             for i in range(len(inv)):
                 inv_str += str(i + 1) + '. ' + inv[i] + ' '
             hp_str = f'\nВаше здоровье: {int(users[x]["hp"])}'
-            await some_magic[x].message.reply_text(inv_str + hp_str) # вывод инвентаря и здоровья 
+            await some_magic[x].message.reply_text(inv_str + hp_str)
             if end:
                 users[x]['start_game'] = 0
-                users[x]['room'] = 'wait'  # игроки переносятся в комнату ожидания 
+                users[x]['room'] = 'wait'  # игроки переносятся в комнату ожидания
+                with open('static/img/end.png', 'rb') as photo:
+                    await some_magic[x].message.reply_photo(photo=photo)
 
 
 def brain(users1):
@@ -83,7 +83,7 @@ def brain(users1):
             print(users[user]['inventory'])
             prey = ' '.join(act[1:])
             prey_act = users[prey]['action'].split()
-            if users[prey]['frozen'][0] == '0':  # цель не в цементе 
+            if users[prey]['frozen'][0] == '0':  # цель не в цементе
                 if prey_act[0] == 'dodge':  # увернулся?
                     fin_message += f'{user.split(">")[1][:-3]} кинул арматуру в {prey.split(">")[1][:-3]}, но тот увернулся!\n'
                 elif prey_act[0] == 'throw_sand':  # кинул песок?
@@ -111,7 +111,7 @@ def brain(users1):
             elif prey_act[0] == 'throw_sand':  # кинул песок?
                 fin_message += (f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}, но промазал '
                                 f'из-за песка\n')
-            elif prey_act[0] == 'throw_brick' and ' '.join(prey_act[1:]) == user:  # цель кинула в нас кирпич 
+            elif prey_act[0] == 'throw_brick' and ' '.join(prey_act[1:]) == user:  # цель кинула в нас кирпич
                 fin_message += (f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}, но цемент врезался '
                                 f'в кирпич\n')
             elif prey_act[0] == 'throw_cement' and ' '.join(prey_act[1:]) == user:  # цель кинула в нас цемент
@@ -119,7 +119,7 @@ def brain(users1):
                                 f'пути брата-цемента\n')
             else:
                 lst = list(users[prey]['frozen'])
-                lst[2] = '1'  # теперь заморожен 
+                lst[2] = '1'  # теперь заморожен
                 users[prey]['frozen'] = ''.join(lst)
                 fin_message += f'{user.split(">")[1][:-3]} кинул цемент в {prey.split(">")[1][:-3]}!\n'
             users[user]['inventory'].remove('цемент')
@@ -173,7 +173,7 @@ def brain(users1):
     if survived == 0:  # все умерли?
         fin_message += ('Последний негритенок посмотел устало\n Он пошел повесился, и никого не стало... \n'
                         ' Ничья: все мертвы\n')
-        return fin_message, True  # конец игры 
+        return fin_message, True  # конец игры
     for user in users1:
         fr = users[user]['frozen'].split()
         print(user, fr)
@@ -208,6 +208,8 @@ async def start(update, context):
     some_magic[user] = update
     users[user] = {'room': "wait", 'hp': 5, 'ready': 0, 'action': '', 'inventory': [], 'frozen': '0 0', 'last_dodge': 0,
                    'start_game': 0, 'item': '-'}
+    with open('static/img/start.png', 'rb') as photo:
+        await update.message.reply_photo(photo=photo)
     await update.message.reply_html(
         rf'Привет {user}! Я бот для игры в "Догони меня кирпич!". Узнать правила можно по команде /rules',
         reply_markup=keyboard
@@ -216,11 +218,13 @@ async def start(update, context):
 
 
 async def rules(update, context):
-    await update.message.reply_text('potom dobavlu')
+    with open('rules.txt', 'r', encoding='utf-8') as file:
+        await update.message.reply_text(file.read())
 
 
 async def help_command(update, context):
-    await update.message.reply_text("Я пока не умею помогать... Я только ваше эхо.")
+    with open('help.txt', 'r', encoding='utf-8') as file:
+        await update.message.reply_text(file.read())
 
 
 async def start_game(update, context):
@@ -243,27 +247,30 @@ async def start_game(update, context):
 #  rooms starting
 async def join_room(update, context):
     user = update.effective_user.mention_html()
+    try:
 
-    #  сменить юзеру комнату или, если он еще не в списке юзеров, добавить его туда
-    if users[user]["room"] != "wait":
-        room = users[user]['room']
+        #  сменить юзеру комнату или, если он еще не в списке юзеров, добавить его туда
+        if users[user]["room"] != "wait":
+            room = users[user]['room']
 
-        room_users = rooms[room]
-        room_users.remove(user)
-        rooms[room] = room_users  # удаление пользователя из комнаты
-        if not rooms[room]:
-            del rooms[room]
-    users[user]['room'] = context.args[0]
+            room_users = rooms[room]
+            room_users.remove(user)
+            rooms[room] = room_users  # удаление пользователя из комнаты
+            if not rooms[room]:
+                del rooms[room]
+        users[user]['room'] = context.args[0]
 
-    if context.args[0] in rooms:  # комната существует?
-        if user not in rooms[context.args[0]]:  # юзер уже находится в этой комнате?
-            rooms[context.args[0]].append(user)
-            users[user]['ready'] = 0
-    else:
-        rooms[context.args[0]] = [user]
+        if context.args[0] in rooms:  # комната существует?
+            if user not in rooms[context.args[0]]:  # юзер уже находится в этой комнате?
+                rooms[context.args[0]].append(user)
+                users[user]['ready'] = 0
+        else:
+            rooms[context.args[0]] = [user]
 
-    users[user]['start_game'] = 0
-    await update.message.reply_text('Успешно добавлена комната')
+        users[user]['start_game'] = 0
+        await update.message.reply_text('Успешно добавлена комната')
+    except IndexError:
+        await update.message.reply_text('Не указан номер комнаты')
 
 
 async def make_action(update):
@@ -459,9 +466,9 @@ async def stop(update, context):
 
 
 def main():
-    application = Application.builder().token(BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("rules", rules))
     application.add_handler(ConversationHandler(entry_points=[CommandHandler("start", start)],
                                                 states={1: [CommandHandler('take_brick', brick),
                                                             CommandHandler("join_room", join_room),
@@ -472,7 +479,9 @@ def main():
                                                             CommandHandler('dodge', dodge),
                                                             CommandHandler('throw_sand', throw_sand),
                                                             CommandHandler('repair_helmet', repair_helmet),
-                                                            CommandHandler('start_game', start_game)],
+                                                            CommandHandler('start_game', start_game),
+                                                            CommandHandler("rules", rules),
+                                                           CommandHandler("help", help_command)],
                                                         2: [MessageHandler(filters.TEXT & ~filters.COMMAND, throw_out)],
                                                         3: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_prey)]
                                                         },
